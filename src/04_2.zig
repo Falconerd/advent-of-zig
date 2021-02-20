@@ -1,9 +1,10 @@
 const std = @import("std");
 const print = std.debug.print;
 
-const colors = [7][]const u8{ "amb", "blu", "brn", "gry", "grn", "hzl", "oth" };
+const COLORS = [8][]const u8{ "amb", "blu", "brn", "gry", "grn", "hzl", "oth", "oth" };
+const LABELS = [8][]const u8{ "ecl", "pid", "eyr", "hcl", "byr", "iyr", "hgt", "cid" };
 
-fn indexOf(query: []const u8, items: [7][]const u8) !u8 {
+fn indexOf(query: []const u8, items: [8][]const u8) !u8 {
     for (items) |item, index| {
         if (std.mem.eql(u8, item, query)) {
             return @intCast(u8, index);
@@ -85,7 +86,7 @@ fn validateField(field: []const u8, value: []const u8) !bool {
     }
     if (std.mem.eql(u8, field, "ecl")) {
         // exactly one of 'amb', 'blu', 'brn', 'gry', 'grn', 'hzl', 'oth'
-        var index = indexOf(value, colors) catch return error.InvalidEyeColor;
+        var index = indexOf(value, COLORS) catch return error.InvalidEyeColor;
         return true;
     }
     if (std.mem.eql(u8, field, "pid")) {
@@ -108,37 +109,25 @@ pub fn main() !void {
     var len = try file.getEndPos();
     var content = try file.reader().readAllAlloc(&gpa.allocator, len);
 
-    var map = std.AutoHashMap(usize, []const u8).init(&gpa.allocator);
-    defer map.deinit();
+    var people_it = std.mem.split(content, "\n\n");
+    var valid_count: u32 = 0;
 
-    var line_it = std.mem.split(content, "\n");
-    var line_count: usize = 0;
-
-    var line_list = std.ArrayList([]const u8).init(&gpa.allocator);
-    defer line_list.deinit();
-
-    var labels = [7][]const u8{ "ecl", "pid", "eyr", "hcl", "byr", "iyr", "hgt" };
-    var rules: u8 = 0;
-    var block_index: usize = 0;
-    var valid_count: usize = 0;
-
-    while (line_it.next()) |line| {
-        if (line.len == 0) {
-            if (rules == 127) {
-                valid_count += 1;
-            }
-            block_index += 1;
-            rules = 0;
-        }
-        var items_it = std.mem.split(line, " ");
+    validtor: while (people_it.next()) |person| {
+        var p = try gpa.allocator.alloc(u8, person.len);
+        _ = std.mem.replace(u8, person, "\n", " ", p);
+        var items_it = std.mem.split(p, " ");
+        var flags: u8 = 0;
         while (items_it.next()) |item| {
             var item_it = std.mem.split(item, ":");
-            var field = item_it.next() orelse continue;
-            var value = item_it.next() orelse continue;
-            var valid = validateField(field, value) catch continue;
-            var index = indexOf(field, labels) catch continue;
-            rules |= (@intCast(u8, 1) << @intCast(u3, index));
+            var field = item_it.next() orelse continue :validtor;
+            var value = item_it.next() orelse continue :validtor;
+            var index = indexOf(field, LABELS) catch continue :validtor;
+            _ = validateField(field, value) catch continue :validtor;
+            flags |= (@intCast(u8, 1) << @intCast(u3, index));
         }
+        if (flags == 127 or flags == 255)
+            valid_count += 1;
+        flags = 0;
     }
 
     print("vaild items: {}\n", .{valid_count});
