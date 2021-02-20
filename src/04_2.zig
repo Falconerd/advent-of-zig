@@ -127,7 +127,6 @@ pub fn main() !void {
         }
         if (flags == 127 or flags == 255)
             valid_count += 1;
-        flags = 0;
     }
 
     print("vaild items: {}\n", .{valid_count});
